@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --color-parchment: #f3ead8;
+  --color-cream: #faf6ee;
+  --color-ink: #14241b;
+  --color-ink-soft: #2c3d32;
+  --color-moss: #1f4a36;
+  --color-leaf: #3d6b4f;
+  --color-sage: #6b8a72;
+  --color-gold: #d4a24a;
+  --color-terra: #c45c26;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  background: var(--color-parchment);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--color-ink);
+  color: var(--color-cream);
+  padding: 0.75rem 1.35rem;
+  font-size: 0.925rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease;
+  box-shadow: 0 10px 24px -16px rgba(20, 36, 27, 0.7);
+}
+
+.btn-primary:hover {
+  background: #1c3326;
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.input-field {
+  width: 100%;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(20, 36, 27, 0.1);
+  background: #fffdf8;
+  padding: 0.72rem 0.95rem;
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.input-field:focus {
+  border-color: var(--color-gold);
+  box-shadow: 0 0 0 3px rgba(212, 162, 74, 0.22);
+}
+
+.input-field::placeholder {
+  color: rgba(20, 36, 27, 0.35);
+}
