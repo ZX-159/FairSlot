@@ -1,4 +1,4 @@
-import supabase from './db-client.js';
+import { getSupabaseClient } from './db-client.js';
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -7,6 +7,7 @@ function cors(res) {
 }
 
 async function getUser(req) {
+  const supabase = getSupabaseClient();
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return null;
   const { data, error } = await supabase.auth.getUser(token);
@@ -66,11 +67,13 @@ function normalizeSettings(raw = {}) {
 }
 
 async function readSettings(eventId) {
+  const supabase = getSupabaseClient();
   const { data } = await supabase.from('event_settings').select('*').eq('event_id', eventId).maybeSingle();
   return { ...defaultSettings(), ...(data || {}), event_id: eventId };
 }
 
 async function writeSettings(eventId, raw) {
+  const supabase = getSupabaseClient();
   const settings = { event_id: eventId, ...normalizeSettings(raw) };
   const { data, error } = await supabase
     .from('event_settings')

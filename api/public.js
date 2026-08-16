@@ -1,4 +1,4 @@
-import supabase from './db-client.js';
+import { getSupabaseClient } from './db-client.js';
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -67,6 +67,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   try {
+    const supabase = getSupabaseClient();
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     const code = (req.query?.code || '').toString().trim().toUpperCase();

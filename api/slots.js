@@ -1,4 +1,4 @@
-import supabase from './db-client.js';
+import { getSupabaseClient } from './db-client.js';
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -7,6 +7,7 @@ function cors(res) {
 }
 
 async function getUser(req) {
+  const supabase = getSupabaseClient();
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return null;
   const { data, error } = await supabase.auth.getUser(token);
@@ -15,6 +16,7 @@ async function getUser(req) {
 }
 
 async function ownedEvent(userId, eventId) {
+  const supabase = getSupabaseClient();
   const { data } = await supabase
     .from('events')
     .select('*')
@@ -29,6 +31,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   try {
+    const supabase = getSupabaseClient();
     const user = await getUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
