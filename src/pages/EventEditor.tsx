@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import EventSettingsFields from '../components/EventSettingsFields';
 import { useAuth } from '../contexts/AuthContext';
-import { authFetch } from '../lib/api';
+import { authFetch, parseJsonSafe } from '../lib/api';
 import { defaultSettings } from '../lib/settings';
 import type { EventSettings } from '../lib/types';
 
@@ -46,8 +46,9 @@ export default function EventEditor() {
           settings,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not create');
+      const data = await parseJsonSafe(res) as any;
+      if (!res.ok) throw new Error(data?.error || 'Could not create');
+      if (!data) throw new Error('Could not create');
       navigate(`/studio/${data.id}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not create');

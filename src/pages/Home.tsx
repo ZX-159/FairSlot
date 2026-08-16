@@ -5,6 +5,7 @@ import { ArrowRight, Lock, Radio, FileSpreadsheet, Sparkles, MessageCircle, Tabl
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import EventCard from '../components/EventCard';
+import { parseJsonSafe } from '../lib/api';
 import LiveDot from '../components/LiveDot';
 import type { EventRecord } from '../lib/types';
 
@@ -23,7 +24,7 @@ export default function Home() {
     const load = async () => {
       try {
         const res = await fetch('/api/public');
-        const data = await res.json();
+        const data = await parseJsonSafe(res) as any;
         setEvents(Array.isArray(data) ? data.slice(0, 3) : []);
       } catch {
         setEvents([]);

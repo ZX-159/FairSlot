@@ -5,7 +5,7 @@ import { Plus, Radio, Lock, Users } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import EventCard from '../components/EventCard';
 import { useAuth } from '../contexts/AuthContext';
-import { authFetch, formatRelative } from '../lib/api';
+import { authFetch, formatRelative, parseJsonSafe } from '../lib/api';
 import type { DashboardPayload, EventRecord } from '../lib/types';
 
 export default function Dashboard() {
@@ -17,8 +17,9 @@ export default function Dashboard() {
   const load = async () => {
     try {
       const res = await authFetch('/api/events', session);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not load studio');
+      const data = await parseJsonSafe(res) as any;
+      if (!res.ok) throw new Error(data?.error || 'Could not load studio');
+      if (!data) throw new Error('Could not load studio');
       setPayload({ events: data.events || [], recentClaims: data.recentClaims || [] });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not load studio');

@@ -7,7 +7,7 @@ import Footer from '../components/Footer';
 import SlotCard from '../components/SlotCard';
 import LiveDot from '../components/LiveDot';
 import type { PublicEvent, SlotRecord } from '../lib/types';
-import { formatDate } from '../lib/api';
+import { formatDate, parseJsonSafe } from '../lib/api';
 import supabase from '../lib/supabase';
 
 function windowState(event: PublicEvent) {
@@ -56,8 +56,9 @@ export default function ClaimEvent() {
     try {
       const pinQ = enteredPin != null ? `&pin=${encodeURIComponent(enteredPin)}` : '';
       const res = await fetch(`/api/public?code=${encodeURIComponent(code.toUpperCase())}${pinQ}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Event not found');
+      const data = await parseJsonSafe(res) as PublicEvent & { needs_pin?: boolean } | null;
+      if (!res.ok) throw new Error((data as any)?.error || 'Event not found');
+      if (!data) throw new Error('Event not found');
       applyPayload(data);
       setError('');
       return data as PublicEvent & { needs_pin?: boolean };
@@ -182,8 +183,8 @@ export default function ClaimEvent() {
           notice_ack: noticeAck || noticePassed,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not claim');
+      const data = await parseJsonSafe(res) as any;
+      if (!res.ok) throw new Error(data?.error || 'Could not claim');
       navigate(`/receipt/${data.claim_token}`);
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : 'Could not claim');

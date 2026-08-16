@@ -6,7 +6,7 @@ import Navbar from '../components/Navbar';
 import LiveDot from '../components/LiveDot';
 import EventSettingsFields from '../components/EventSettingsFields';
 import { useAuth } from '../contexts/AuthContext';
-import { authFetch, formatDate, formatRelative } from '../lib/api';
+import { authFetch, formatDate, formatRelative, parseJsonSafe } from '../lib/api';
 import { defaultSettings } from '../lib/settings';
 import type { ClaimRecord, EventRecord, EventSettings, SlotRecord } from '../lib/types';
 import supabase from '../lib/supabase';
@@ -41,8 +41,9 @@ export default function EventManage() {
   const load = async () => {
     try {
       const res = await authFetch(`/api/events?id=${id}`, session);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Not found');
+      const data = await parseJsonSafe(res) as any;
+      if (!res.ok) throw new Error(data?.error || 'Not found');
+      if (!data) throw new Error('Not found');
       setEvent(data);
       setSettings({ ...defaultSettings(), ...(data.settings || {}) });
     } catch (err: unknown) {
@@ -98,8 +99,8 @@ export default function EventManage() {
           sort_order: event.slots.length,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not add');
+      const data = await parseJsonSafe(res) as any;
+      if (!res.ok) throw new Error(data?.error || 'Could not add');
       setSlotName('');
       setSlotDesc('');
       await load();
@@ -133,9 +134,9 @@ export default function EventManage() {
       method: 'PUT',
       body: JSON.stringify({ id: event.id, status }),
     });
-    const data = await res.json();
+    const data = await parseJsonSafe(res) as any;
     if (!res.ok) {
-      setMsg(data.error || 'Could not update');
+      setMsg(data?.error || 'Could not update');
       return;
     }
     load();
@@ -151,8 +152,8 @@ export default function EventManage() {
         method: 'PUT',
         body: JSON.stringify({ id: event.id, settings }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not save settings');
+      const data = await parseJsonSafe(res) as any;
+      if (!res.ok) throw new Error(data?.error || 'Could not save settings');
       setOkMsg('Settings saved.');
       setSettings({ ...defaultSettings(), ...(data.settings || settings) });
     } catch (err: unknown) {
@@ -168,9 +169,9 @@ export default function EventManage() {
       method: 'PUT',
       body: JSON.stringify({ id: event.id, locked: true }),
     });
-    const data = await res.json();
+    const data = await parseJsonSafe(res) as any;
     if (!res.ok) {
-      setMsg(data.error || 'Could not lock');
+      setMsg(data?.error || 'Could not lock');
       return;
     }
     setLockConfirm(false);
@@ -185,8 +186,8 @@ export default function EventManage() {
     });
     if (res.ok) navigate('/dashboard');
     else {
-      const data = await res.json();
-      setMsg(data.error || 'Could not delete');
+      const data = await parseJsonSafe(res) as any;
+      setMsg(data?.error || 'Could not delete');
     }
   };
 

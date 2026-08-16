@@ -3,6 +3,7 @@ import { Search } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import EventCard from '../components/EventCard';
+import { parseJsonSafe } from '../lib/api';
 import type { EventRecord } from '../lib/types';
 
 export default function PublicEvents() {
@@ -16,8 +17,8 @@ export default function PublicEvents() {
     const load = async () => {
       try {
         const res = await fetch('/api/public');
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Could not load events');
+        const data = await parseJsonSafe(res) as any;
+        if (!res.ok) throw new Error(data?.error || 'Could not load events');
         setEvents(Array.isArray(data) ? data : []);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Could not load events');

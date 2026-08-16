@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { parseJsonSafe } from '../lib/api';
 
 export default function JoinEvent() {
   const navigate = useNavigate();
@@ -21,8 +22,8 @@ export default function JoinEvent() {
     setError('');
     try {
       const res = await fetch(`/api/public?code=${encodeURIComponent(c)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Event not found');
+      const data = await parseJsonSafe(res) as any;
+      if (!res.ok) throw new Error(data?.error || 'Event not found');
       navigate(`/e/${c}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Event not found');

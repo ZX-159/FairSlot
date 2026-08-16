@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Check, Calendar, MapPin, Download } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import { formatDate } from '../lib/api';
+import { formatDate, parseJsonSafe } from '../lib/api';
 import { downloadTicket } from '../lib/ticket';
 import type { ClaimRecord, EventRecord, EventSettings, SlotRecord } from '../lib/types';
 
@@ -22,8 +22,9 @@ export default function ClaimReceipt() {
     const load = async () => {
       try {
         const res = await fetch(`/api/public?token=${encodeURIComponent(token)}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Receipt not found');
+        const data = await parseJsonSafe(res) as any;
+        if (!res.ok) throw new Error(data?.error || 'Receipt not found');
+        if (!data) throw new Error('Receipt not found');
         setPayload(data);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Receipt not found');

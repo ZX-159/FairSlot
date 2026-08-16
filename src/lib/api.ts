@@ -15,6 +15,16 @@ export async function authFetch(
   return fetch(url, { ...options, headers });
 }
 
+export async function parseJsonSafe<T = any>(res: Response): Promise<T | null> {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
 export function formatDate(value?: string | null, withTime = false) {
   if (!value) return 'Date TBC';
   const d = new Date(value);
