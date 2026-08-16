@@ -5,10 +5,17 @@ export function asPages(handler) {
   return async (context) => {
     const { request, env } = context;
 
-    if (env?.NEXT_PUBLIC_SUPABASE_URL) process.env.NEXT_PUBLIC_SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL;
-    if (env?.SUPABASE_SERVICE_ROLE_KEY) process.env.SUPABASE_SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
-    if (env?.VITE_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      process.env.NEXT_PUBLIC_SUPABASE_URL = env.VITE_SUPABASE_URL;
+    // Map Cloudflare environment variables to process.env safely
+    if (env) {
+      if (env.SUPABASE_URL) process.env.SUPABASE_URL = env.SUPABASE_URL;
+      if (env.SUPABASE_ANON_KEY) process.env.SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY;
+      if (env.SUPABASE_SERVICE_ROLE_KEY) process.env.SUPABASE_SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
+      if (env.VITE_SUPABASE_URL) process.env.VITE_SUPABASE_URL = env.VITE_SUPABASE_URL;
+      if (env.NEXT_PUBLIC_SUPABASE_URL) process.env.NEXT_PUBLIC_SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL;
+      
+      // Fallbacks
+      if (!process.env.SUPABASE_URL && env.VITE_SUPABASE_URL) process.env.SUPABASE_URL = env.VITE_SUPABASE_URL;
+      if (!process.env.SUPABASE_ANON_KEY && env.VITE_SUPABASE_ANON_KEY) process.env.SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY;
     }
 
     const url = new URL(request.url);
