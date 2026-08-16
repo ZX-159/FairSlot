@@ -4,10 +4,17 @@ import { triggerRestore } from './db-wake.js';
 const clientCache = new Map();
 
 export function getSupabaseClient(env = process.env) {
-  const url = env.NEXT_PUBLIC_SUPABASE_URL || env.VITE_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY;
-  const cacheKey = `${url || ''}:${key || ''}`;
+  // Check wrangler.toml [vars] first (SUPABASE_URL), then fallback variants
+  const url = env.SUPABASE_URL || env.VITE_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
+    throw new Error('supabaseUrl and supabaseAnonKey are required.');
+  }
+
+  const cacheKey = `${url}:${key}`;
   if (clientCache.has(cacheKey)) return clientCache.get(cacheKey);
+
   const supabase = createClient(url, key, {
     global: {
       fetch: async (u, options) => {
@@ -17,6 +24,7 @@ export function getSupabaseClient(env = process.env) {
       },
     },
   });
+
   clientCache.set(cacheKey, supabase);
   return supabase;
 }
