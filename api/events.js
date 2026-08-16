@@ -85,9 +85,23 @@ export default async function handler(req, res) {
   cors(res);
   if (req.method === 'OPTIONS') return res.status(204).end();
 
+  // Basic request logging for debugging method/auth issues
+  try {
+    console.info(`[events] received request`, { method: req.method });
+  } catch (e) {
+    // ignore logging errors
+  }
+
   try {
     const user = await getUser(req);
-    if (!user) return res.status(401).json({ error: 'Unauthorized' });
+    if (!user) {
+      try {
+        console.warn('[events] unauthorized request', { method: req.method, hasAuthHeader: !!req.headers.authorization });
+      } catch (e) {
+        /* ignore */
+      }
+      return res.status(401).json({ error: 'Unauthorized: missing or invalid Authorization header' });
+    }
 
     if (req.method === 'GET') {
       const id = req.query?.id ? Number(req.query.id) : null;
@@ -235,7 +249,12 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    res.status(405).json({ error: 'Method not allowed' });
+    try {
+      console.warn('[events] method not allowed', { method: req.method });
+    } catch (e) {
+      /* ignore */
+    }
+    res.status(405).json({ error: `Method not allowed: ${req.method}` });
   } catch (err) {
     console.error('events API error:', err);
     res.status(500).json({ error: err.message || 'Server error' });
