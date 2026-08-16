@@ -14,7 +14,10 @@ const routes = {
 };
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
+    // 🔑 Expose Cloudflare runtime env globally so db-client can read it
+    globalThis.env = env;
+
     try {
       const url = new URL(request.url);
       const path = url.pathname;
