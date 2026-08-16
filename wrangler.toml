@@ -7,3 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+
+[vars]
+SUPABASE_URL = "https://jpqagwoelhcirolhzqrw.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcWFnd29lbGhjaXJvbGh6cXJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3ODY4ODAsImV4cCI6MjEwMjM2Mjg4MH0.jfuUYdXVSR_P2hzIUOBzifYcHnYKL4zU2iqAhwjbNx4"
