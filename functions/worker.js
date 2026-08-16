@@ -1,4 +1,17 @@
 import { asPages } from './_lib/asPages.js';
+import claimsHandler from '../api/claims.js';
+import eventsHandler from '../api/events.js';
+import exportHandler from '../api/export.js';
+import publicHandler from '../api/public.js';
+import slotsHandler from '../api/slots.js';
+
+const routes = {
+  claims: asPages(claimsHandler),
+  events: asPages(eventsHandler),
+  export: asPages(exportHandler),
+  public: asPages(publicHandler),
+  slots: asPages(slotsHandler),
+};
 
 export default {
   async fetch(request, env) {
@@ -6,19 +19,13 @@ export default {
       const url = new URL(request.url);
       const path = url.pathname;
       if (path.startsWith('/api/')) {
-        const routePath = path.replace(/^\/api/, '') || '/';
-        const modulePath = `../api${routePath}.js`;
-        try {
-          const mod = await import(modulePath);
-          const handler = mod.default;
-          const pagesHandler = asPages(handler);
-          return await pagesHandler({ request, env });
-        } catch (err) {
-          return new Response(JSON.stringify({ error: 'API route not found' }), {
-            status: 404,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
+        const seg = path.split('/')[2] || '';
+        const handler = routes[seg];
+        if (handler) return await handler({ request, env });
+        return new Response(JSON.stringify({ error: 'API route not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
       // Fall back to static assets if available
