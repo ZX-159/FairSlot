@@ -1,3 +1,4 @@
+# FairSlot — Cloudflare Workers + Static Assets
 name = "fairslot"
 main = "functions/worker.js"
 compatibility_date = "2025-10-04"
@@ -7,8 +8,20 @@ compatibility_flags = ["nodejs_compat"]
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+# Worker must see /api/* before the asset server (avoids POST 405).
 run_worker_first = true
 
-[vars]
-SUPABASE_URL = "https://jpqagwoelhcirolhzqrw.supabase.co"
-SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwcWFnd29lbGhjaXJvbGh6cXJ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3ODY4ODAsImV4cCI6MjEwMjM2Mjg4MH0.jfuUYdXVSR_P2hzIUOBzifYcHnYKL4zU2iqAhwjbNx4"
+# Set real values in the Cloudflare dashboard (Workers → fairslot → Settings
+# → Variables and Secrets). Do NOT commit secrets here.
+#
+# Required vars:
+#   SUPABASE_URL
+#   SUPABASE_ANON_KEY
+#   VITE_SUPABASE_URL              (build-time for SPA)
+#   VITE_SUPABASE_ANON_KEY         (build-time for SPA)
+#   NEXT_PUBLIC_SUPABASE_URL       (alias)
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY  (alias)
+#
+# Required secret:
+#   SUPABASE_SERVICE_ROLE_KEY
+#   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY

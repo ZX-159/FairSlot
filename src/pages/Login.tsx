@@ -27,10 +27,20 @@ export default function Login() {
     setBusy(true);
     try {
       if (mode === 'up') {
-        const { error: err } = await supabase.auth.signUp({ email: email.trim(), password });
+        // Email confirmation is disabled on this project — signUp returns a session immediately.
+        const { data, error: err } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+        });
         if (err) throw err;
-        setNotice('Account created. You can sign in now.');
-        setMode('in');
+        if (data.session) {
+          // AuthContext onAuthStateChange will redirect via Navigate above.
+          setNotice('Account created. Opening your studio…');
+        } else {
+          // Fallback if a project has confirm-email turned on later.
+          setNotice('Account created. You can sign in now.');
+          setMode('in');
+        }
       } else {
         const { error: err } = await supabase.auth.signInWithPassword({
           email: email.trim(),
@@ -107,10 +117,12 @@ export default function Login() {
             <p className="mt-8 text-center text-sm text-ink-soft/70">
               {mode === 'in' ? 'New organiser?' : 'Already have an account?'}
               <button
+                type="button"
                 className="ml-2 text-ink underline decoration-gold/60 underline-offset-4"
                 onClick={() => {
                   setMode(mode === 'in' ? 'up' : 'in');
                   setError('');
+                  setNotice('');
                 }}
               >
                 {mode === 'in' ? 'Create one' : 'Sign in'}

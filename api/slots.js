@@ -1,22 +1,6 @@
-import { getSupabaseClient } from './db-client.js';
+import { cors, getUser, db } from './_auth.js';
 
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-}
-
-async function getUser(req) {
-  const supabase = getSupabaseClient();
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return null;
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) return null;
-  return data.user;
-}
-
-async function ownedEvent(userId, eventId) {
-  const supabase = getSupabaseClient();
+async function ownedEvent(supabase, userId, eventId) {
   const { data } = await supabase
     .from('events')
     .select('*')
@@ -31,14 +15,14 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   try {
-    const supabase = getSupabaseClient();
+    const supabase = db(req);
     const user = await getUser(req);
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
     if (req.method === 'GET') {
       const eventId = Number(req.query?.event_id);
       if (!eventId) return res.status(400).json({ error: 'event_id is required' });
-      const event = await ownedEvent(user.id, eventId);
+      const event = await ownedEvent(supabase, user.id, eventId);
       if (!event) return res.status(404).json({ error: 'Event not found' });
       const { data, error } = await supabase
         .from('slots')
@@ -52,7 +36,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const { event_id, name, description, category, capacity, sort_order } = req.body || {};
       if (!event_id || !name) return res.status(400).json({ error: 'event_id and name are required' });
-      const event = await ownedEvent(user.id, event_id);
+      const event = await ownedEvent(supabase, user.id, event_id);
       if (!event) return res.status(404).json({ error: 'Event not found' });
       if (event.locked) return res.status(423).json({ error: 'Event is locked' });
       const cap = Math.max(1, Number(capacity) || 1);
@@ -60,9 +44,9 @@ export default async function handler(req, res) {
         .from('slots')
         .insert({
           event_id,
-          name: String(name).trim(),
-          description: description || '',
-          category: category || 'General',
+          name: String(name).trim().slice(0, 200),
+          description: description ? String(description).slice(0, 2000) : '',
+          category: category ? String(category).slice(0, 80) : 'General',
           capacity: cap,
           claimed_count: 0,
           sort_order: Number(sort_order) || 0,
@@ -79,15 +63,17 @@ export default async function handler(req, res) {
       if (!id) return res.status(400).json({ error: 'id is required' });
       const { data: slot } = await supabase.from('slots').select('*').eq('id', id).single();
       if (!slot) return res.status(404).json({ error: 'Slot not found' });
-      const event = await ownedEvent(user.id, slot.event_id);
+      const event = await ownedEvent(supabase, user.id, slot.event_id);
       if (!event) return res.status(404).json({ error: 'Event not found' });
       if (event.locked) return res.status(423).json({ error: 'Event is locked' });
       const patch = {};
-      if (name !== undefined) patch.name = String(name).trim();
-      if (description !== undefined) patch.description = description;
-      if (category !== undefined) patch.category = category;
+      if (name !== undefined) patch.name = String(name).trim().slice(0, 200);
+      if (description !== undefined) patch.description = String(description).slice(0, 2000);
+      if (category !== undefined) patch.category = String(category).slice(0, 80);
       if (capacity !== undefined) {
-        const cap = Math.max(slot.claimed_count || 1, Number(capacity) || 1);
+        // Never drop capacity below seats already claimed.
+        const claimed = Number(slot.claimed_count) || 0;
+        const cap = Math.max(claimed, Math.max(1, Number(capacity) || 1));
         patch.capacity = cap;
       }
       if (sort_order !== undefined) patch.sort_order = Number(sort_order) || 0;
@@ -102,7 +88,7 @@ export default async function handler(req, res) {
       if (!id) return res.status(400).json({ error: 'id is required' });
       const { data: slot } = await supabase.from('slots').select('*').eq('id', id).single();
       if (!slot) return res.status(404).json({ error: 'Slot not found' });
-      const event = await ownedEvent(user.id, slot.event_id);
+      const event = await ownedEvent(supabase, user.id, slot.event_id);
       if (!event) return res.status(404).json({ error: 'Event not found' });
       if (event.locked) return res.status(423).json({ error: 'Event is locked' });
       await supabase.from('claims').delete().eq('slot_id', id);

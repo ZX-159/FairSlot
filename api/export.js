@@ -1,10 +1,4 @@
-import { getSupabaseClient } from './db-client.js';
-
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-}
+import { cors, bearerToken, db } from './_auth.js';
 
 function csvEscape(v) {
   const s = v == null ? '' : String(v);
@@ -13,13 +7,15 @@ function csvEscape(v) {
 }
 
 export default async function handler(req, res) {
-  cors(res);
+  cors(res, 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   try {
-    const supabase = getSupabaseClient();
+    const supabase = db(req);
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-    const token = req.headers.authorization?.replace('Bearer ', '') || req.query?.token;
+
+    // Prefer Authorization header; allow ?token= only as a fallback for download links.
+    const token = bearerToken(req) || (req.query?.token ? String(req.query.token) : '');
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
     const { data: auth, error: authErr } = await supabase.auth.getUser(token);
     if (authErr || !auth?.user) return res.status(401).json({ error: 'Invalid token' });
@@ -66,7 +62,9 @@ export default async function handler(req, res) {
         c.participant_phone || '',
         c.notes || '',
         c.created_at,
-      ].map(csvEscape).join(',');
+      ]
+        .map(csvEscape)
+        .join(',');
     });
     const csv = [headers.join(','), ...rows].join('\n');
     const filename = `fairslot-${event.join_code}-claims.csv`;

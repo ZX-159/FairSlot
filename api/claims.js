@@ -1,19 +1,4 @@
-import { getSupabaseClient } from './db-client.js';
-
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-}
-
-async function getUser(req) {
-  const supabase = getSupabaseClient();
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return null;
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) return null;
-  return data.user;
-}
+import { cors, getUser, db } from './_auth.js';
 
 function makeToken() {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -22,12 +7,34 @@ function makeToken() {
   return s;
 }
 
+function mapClaimError(message) {
+  const m = String(message || '');
+  if (m.includes('SLOT_FULL')) return { status: 409, error: 'This slot just filled up' };
+  if (m.includes('SLOT_LOCKED')) return { status: 423, error: 'This slot is locked' };
+  if (m.includes('EVENT_LOCKED')) return { status: 423, error: 'This event is locked' };
+  if (m.includes('EVENT_NOT_LIVE')) return { status: 423, error: 'This event is not open for claims' };
+  if (m.includes('SLOT_NOT_FOUND')) return { status: 404, error: 'Slot not found' };
+  if (m.includes('EVENT_NOT_FOUND')) return { status: 404, error: 'Event not found' };
+  return null;
+}
+
+function isMissingRpc(err) {
+  const msg = `${err?.message || ''} ${err?.details || ''} ${err?.hint || ''}`;
+  const code = err?.code || '';
+  return (
+    code === 'PGRST202' ||
+    code === '42883' ||
+    /Could not find the function|function .*claim_slot|does not exist/i.test(msg)
+  );
+}
+
 export default async function handler(req, res) {
-  cors(res);
+  cors(res, 'GET, POST, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   try {
-    const supabase = getSupabaseClient();
+    const supabase = db(req);
+
     if (req.method === 'GET') {
       const user = await getUser(req);
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
@@ -50,6 +57,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
+      // Public claim — no organiser auth. Enforced by event status, PIN, windows, capacity.
       const {
         slot_id,
         participant_name,
@@ -60,6 +68,7 @@ export default async function handler(req, res) {
         pin,
         notice_ack,
       } = req.body || {};
+
       if (!slot_id || !participant_name || !participant_email) {
         return res.status(400).json({ error: 'Name, email and a slot are required' });
       }
@@ -82,7 +91,9 @@ export default async function handler(req, res) {
       const { data: event } = await supabase.from('events').select('*').eq('id', slot.event_id).single();
       if (!event) return res.status(404).json({ error: 'Event not found' });
       if (event.locked) return res.status(423).json({ error: 'This event is locked' });
-      if (event.status !== 'live') return res.status(423).json({ error: 'This event is not open for claims' });
+      if (event.status !== 'live') {
+        return res.status(423).json({ error: 'This event is not open for claims' });
+      }
 
       const { data: settings } = await supabase
         .from('event_settings')
@@ -102,7 +113,9 @@ export default async function handler(req, res) {
       }
       if (settings?.confirm_email) {
         const confirm = String(email_confirm || '').trim().toLowerCase();
-        if (confirm !== email) return res.status(400).json({ error: 'Email addresses do not match' });
+        if (confirm !== email) {
+          return res.status(400).json({ error: 'Email addresses do not match' });
+        }
       }
       const now = Date.now();
       if (settings?.claim_opens_at && now < new Date(settings.claim_opens_at).getTime()) {
@@ -123,16 +136,55 @@ export default async function handler(req, res) {
         }
       }
 
-      const { data: updated } = await supabase
+      const claim_token = makeToken();
+      const phone = participant_phone ? String(participant_phone).trim().slice(0, 40) : '';
+      const note = notes ? String(notes).trim().slice(0, 500) : '';
+
+      // Atomic path when schema.sql's claim_slot() is installed.
+      const { data: rpcClaim, error: rpcError } = await supabase.rpc('claim_slot', {
+        p_slot_id: slot.id,
+        p_participant_name: name,
+        p_participant_email: email,
+        p_participant_phone: phone,
+        p_notes: note,
+        p_claim_token: claim_token,
+      });
+
+      if (!rpcError && rpcClaim) {
+        const claim = Array.isArray(rpcClaim) ? rpcClaim[0] : rpcClaim;
+        return res.status(201).json({
+          ...claim,
+          slot_name: slot.name,
+          event_title: event.title,
+          join_code: event.join_code,
+        });
+      }
+
+      if (rpcError && !isMissingRpc(rpcError)) {
+        const mapped = mapClaimError(rpcError.message);
+        if (mapped) return res.status(mapped.status).json({ error: mapped.error });
+        console.warn('claim_slot RPC error, falling back:', rpcError.message);
+      }
+
+      // Legacy optimistic locking (works without the SQL function).
+      const { data: updated, error: updErr } = await supabase
         .from('slots')
         .update({ claimed_count: slot.claimed_count + 1 })
         .eq('id', slot.id)
         .eq('claimed_count', slot.claimed_count)
+        .eq('locked', false)
         .select()
-        .single();
+        .maybeSingle();
+      if (updErr) throw updErr;
       if (!updated) return res.status(409).json({ error: 'This slot just filled up' });
+      if (updated.claimed_count > updated.capacity) {
+        await supabase
+          .from('slots')
+          .update({ claimed_count: slot.claimed_count })
+          .eq('id', slot.id);
+        return res.status(409).json({ error: 'This slot just filled up' });
+      }
 
-      const claim_token = makeToken();
       const { data: claim, error } = await supabase
         .from('claims')
         .insert({
@@ -140,15 +192,18 @@ export default async function handler(req, res) {
           event_id: event.id,
           participant_name: name,
           participant_email: email,
-          participant_phone: participant_phone ? String(participant_phone).trim().slice(0, 40) : '',
-          notes: notes ? String(notes).trim().slice(0, 500) : '',
+          participant_phone: phone,
+          notes: note,
           claim_token,
         })
         .select()
         .single();
 
       if (error || !claim) {
-        await supabase.from('slots').update({ claimed_count: slot.claimed_count }).eq('id', slot.id);
+        await supabase
+          .from('slots')
+          .update({ claimed_count: Math.max(0, (updated.claimed_count || 1) - 1) })
+          .eq('id', slot.id);
         throw error || new Error('Could not save claim');
       }
 
@@ -166,10 +221,14 @@ export default async function handler(req, res) {
 
       let claim = null;
       if (token) {
-        const { data } = await supabase.from('claims').select('*').eq('claim_token', token).single();
+        const { data } = await supabase
+          .from('claims')
+          .select('*')
+          .eq('claim_token', String(token))
+          .maybeSingle();
         claim = data;
       } else if (id && user) {
-        const { data } = await supabase.from('claims').select('*').eq('id', id).single();
+        const { data } = await supabase.from('claims').select('*').eq('id', id).maybeSingle();
         if (data) {
           const { data: ev } = await supabase
             .from('events')
@@ -182,18 +241,26 @@ export default async function handler(req, res) {
       if (!claim) return res.status(404).json({ error: 'Claim not found' });
 
       const { data: event } = await supabase.from('events').select('*').eq('id', claim.event_id).single();
-      if (event?.locked) return res.status(423).json({ error: 'Event is locked — claims are immutable' });
+      if (event?.locked) {
+        return res.status(423).json({ error: 'Event is locked — claims are immutable' });
+      }
 
       await supabase.from('claims').delete().eq('id', claim.id);
-      const { data: slot } = await supabase.from('slots').select('*').eq('id', claim.slot_id).single();
-      if (slot && slot.claimed_count > 0) {
-        await supabase.from('slots').update({ claimed_count: slot.claimed_count - 1 }).eq('id', slot.id);
+      const { data: s } = await supabase.from('slots').select('*').eq('id', claim.slot_id).single();
+      if (s && s.claimed_count > 0) {
+        await supabase
+          .from('slots')
+          .update({ claimed_count: s.claimed_count - 1 })
+          .eq('id', s.id)
+          .eq('claimed_count', s.claimed_count);
       }
       return res.status(200).json({ ok: true });
     }
 
     res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
+    const mapped = mapClaimError(err?.message);
+    if (mapped) return res.status(mapped.status).json({ error: mapped.error });
     console.error('claims API error:', err);
     res.status(500).json({ error: err.message || 'Server error' });
   }

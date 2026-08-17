@@ -1,1 +1,5 @@
+# Cloudflare Pages / Workers Static Assets:
+# API is handled by functions/worker.js (run_worker_first = true).
+# SPA deep links use not_found_handling = "single-page-application" in wrangler.toml.
+# This file is a belt-and-braces fallback for Pages-style deploys.
 /api/*  /api/:splat  200

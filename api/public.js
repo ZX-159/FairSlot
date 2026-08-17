@@ -1,11 +1,6 @@
-import { getSupabaseClient } from './db-client.js';
+import { cors, db } from './_auth.js';
 
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-}
-
+/** Settings safe to ship to the browser — never includes join_pin. */
 function publicSettings(row) {
   if (!row) {
     return {
@@ -62,20 +57,44 @@ function mapSlots(slots, hideRemaining) {
   });
 }
 
+/** Public event card — never expose creator_id. */
+function publicEventFields(event) {
+  return {
+    id: event.id,
+    title: event.title,
+    description: event.description,
+    location: event.location,
+    event_date: event.event_date,
+    cover_url: event.cover_url,
+    category: event.category,
+    status: event.status,
+    join_code: event.join_code,
+    locked: event.locked,
+  };
+}
+
 export default async function handler(req, res) {
-  cors(res);
+  cors(res, 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   try {
-    const supabase = getSupabaseClient();
+    const supabase = db(req);
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     const code = (req.query?.code || '').toString().trim().toUpperCase();
     const token = (req.query?.token || '').toString().trim();
     const pin = (req.query?.pin || '').toString();
 
+    // Receipt lookup by secret claim token
     if (token) {
-      const { data: claim } = await supabase.from('claims').select('*').eq('claim_token', token).single();
+      if (token.length < 8 || token.length > 64) {
+        return res.status(404).json({ error: 'Claim not found' });
+      }
+      const { data: claim } = await supabase
+        .from('claims')
+        .select('*')
+        .eq('claim_token', token)
+        .maybeSingle();
       if (!claim) return res.status(404).json({ error: 'Claim not found' });
       const { data: event } = await supabase.from('events').select('*').eq('id', claim.event_id).single();
       const { data: slot } = await supabase.from('slots').select('*').eq('id', claim.slot_id).single();
@@ -85,15 +104,46 @@ export default async function handler(req, res) {
         .eq('event_id', claim.event_id)
         .maybeSingle();
       return res.status(200).json({
-        claim,
-        event: event ? { ...event, settings: publicSettings(settingsRow) } : null,
-        slot,
+        claim: {
+          id: claim.id,
+          slot_id: claim.slot_id,
+          event_id: claim.event_id,
+          participant_name: claim.participant_name,
+          participant_email: claim.participant_email,
+          participant_phone: claim.participant_phone,
+          notes: claim.notes,
+          claim_token: claim.claim_token,
+          created_at: claim.created_at,
+        },
+        event: event
+          ? { ...publicEventFields(event), settings: publicSettings(settingsRow) }
+          : null,
+        slot: slot
+          ? {
+              id: slot.id,
+              name: slot.name,
+              description: slot.description,
+              category: slot.category,
+              capacity: slot.capacity,
+              claimed_count: slot.claimed_count,
+              locked: slot.locked,
+            }
+          : null,
       });
     }
 
+    // Event by join code
     if (code) {
-      const { data: event } = await supabase.from('events').select('*').eq('join_code', code).single();
+      if (!/^[A-Z0-9]{4,12}$/.test(code)) {
+        return res.status(404).json({ error: 'No event found for that code' });
+      }
+      const { data: event } = await supabase
+        .from('events')
+        .select('*')
+        .eq('join_code', code)
+        .maybeSingle();
       if (!event) return res.status(404).json({ error: 'No event found for that code' });
+
       const { data: settingsRow } = await supabase
         .from('event_settings')
         .select('*')
@@ -103,6 +153,7 @@ export default async function handler(req, res) {
       const expectedPin = (settingsRow?.join_pin || '').toString().trim();
 
       if (expectedPin && pin.trim() !== expectedPin) {
+        // PIN gate — only non-sensitive teaser fields
         return res.status(200).json({
           needs_pin: true,
           pin_required: true,
@@ -125,22 +176,14 @@ export default async function handler(req, res) {
         .order('sort_order', { ascending: true });
 
       return res.status(200).json({
-        id: event.id,
-        title: event.title,
-        description: event.description,
-        location: event.location,
-        event_date: event.event_date,
-        cover_url: event.cover_url,
-        category: event.category,
-        status: event.status,
-        join_code: event.join_code,
-        locked: event.locked,
+        ...publicEventFields(event),
         settings,
         pin_required: settings.pin_required,
         slots: mapSlots(slots, settings.hide_remaining),
       });
     }
 
+    // Public directory of live, listed events
     const { data: events, error } = await supabase
       .from('events')
       .select('*')

@@ -1,13 +1,16 @@
 {
-  "name": "placeholder-model-1",
+  "name": "fairslot",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:api": "node --check api/_auth.js && node --check api/db-client.js && node --check api/db-wake.js && node --check api/events.js && node --check api/claims.js && node --check api/public.js && node --check api/slots.js && node --check api/export.js && node --check functions/worker.js && node --check functions/_lib/asPages.js && node --check functions/api/events.js",
+    "deploy": "npm run build && wrangler deploy",
+    "cf:typegen": "wrangler types"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.1",
@@ -31,6 +34,7 @@
     "globals": "^16.5.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "wrangler": "^4.28.0"
   }
 }

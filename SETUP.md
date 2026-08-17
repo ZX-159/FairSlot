@@ -4,7 +4,7 @@ This guide takes you from an empty folder on your machine to a live app:
 
 - **GitHub** holds the source
 - **Supabase** is your database and email/password auth
-- **Cloudflare Pages** hosts the frontend and the `/api` routes
+- **Cloudflare Workers** (Static Assets) hosts the frontend and the `/api` routes
 
 The preview environment you may have seen is wired to a temporary database. Your own keys go in `.env.prod` and in the Cloudflare / local env files described below. Nothing in this guide should reuse those preview keys.
 
@@ -15,14 +15,14 @@ The preview environment you may have seen is wired to a temporary database. Your
 ```
 Browser
   │
-  ├─ React SPA  ─────────────────────────────►  Cloudflare Pages (static /dist)
+  ├─ React SPA  ─────────────────────────────►  Cloudflare Worker ASSETS (./dist)
   │     │                                         VITE_SUPABASE_URL
   │     │                                         VITE_SUPABASE_ANON_KEY
   │     │
-  │     ├─ fetch('/api/...')  ───────────────►  Cloudflare Pages Functions
-  │     │                                         (functions/api/*)
-  │     │                                         SUPABASE_SERVICE_ROLE_KEY
-  │     │                                         NEXT_PUBLIC_SUPABASE_URL
+  │     ├─ fetch('/api/...')  ───────────────►  Cloudflare Worker (functions/worker.js)
+  │     │                                         run_worker_first = true
+  │     │                                         SUPABASE_SERVICE_ROLE_KEY (secret)
+  │     │                                         SUPABASE_URL / aliases
   │     │
   │     └─ supabase-js (auth + realtime) ───►  Your Supabase project
   │
@@ -31,11 +31,11 @@ Browser
 
 | Piece | Role | Where it lives |
 | --- | --- | --- |
-| `src/` | React UI (Vite + TypeScript + Tailwind) | Built to `dist/`, served by Cloudflare Pages |
-| `api/` | Server handlers for events, slots, claims, CSV | Imported by `functions/api/` on Cloudflare |
-| `functions/` | Cloudflare Pages Functions that expose `/api/*` | Same Pages project as the frontend |
+| `src/` | React UI (Vite + TypeScript + Tailwind) | Built to `dist/`, served via Worker ASSETS |
+| `api/` | Server handlers for events, slots, claims, CSV | Imported by `functions/worker.js` |
+| `functions/worker.js` | Cloudflare Worker entry — routes `/api/*`, serves SPA | Workers Static Assets |
 | Supabase Postgres | `events`, `slots`, `claims`, `event_settings` | Your project |
-| Supabase Auth | Organiser email + password only | Your project |
+| Supabase Auth | Organiser email + password only (confirm email OFF) | Your project |
 
 Participants never create an account. They open a share link (`/e/ABCDEF`) or type a join code. Organisers sign in at `/login`.
 
@@ -47,7 +47,7 @@ Create these if you do not already have them:
 
 1. **GitHub** — [github.com](https://github.com)
 2. **Supabase** — [supabase.com](https://supabase.com) (Free tier is enough)
-3. **Cloudflare** — [dash.cloudflare.com](https://dash.cloudflare.com) (Pages is free)
+3. **Cloudflare** — [dash.cloudflare.com](https://dash.cloudflare.com) (Workers free tier is enough)
 
 On your computer:
 
@@ -184,20 +184,37 @@ Paste the **same** keys into `.env.local`. Vite loads `.env.local` in every mode
 ### 4.3 Create the tables
 
 1. In Supabase: **SQL Editor → New query**.
-2. Open `supabase/schema.sql` from this repo, copy the entire file, paste, **Run**.
-3. Confirm under **Table Editor** that you see:
+2. **New project:** open `supabase/schema.sql`, copy the entire file, paste, **Run**.
+3. **Existing project** that already had the old schema: run `supabase/migrate_existing.sql` instead (safe, non-destructive).
+4. Confirm under **Table Editor** that you see:
    - `events`
    - `slots`
    - `claims`
    - `event_settings`
 
-The script also:
+The schema script also:
 
 - adds indexes and unique constraints on `join_code` and `claim_token`
-- enables Row Level Security with public **SELECT** (needed for live inventory)
-- adds the three tables to the `supabase_realtime` publication
+- enables Row Level Security with a tight policy set (see below)
+- adds `events`, `slots`, and `claims` to the `supabase_realtime` publication
+- installs `public.claim_slot(...)` for atomic capacity updates
 
-Writes never go through the anon key. `/api` uses the service role.
+#### RLS model (important)
+
+| Table | anon / browser | authenticated organiser | service_role (`/api`) |
+| --- | --- | --- | --- |
+| `events` | SELECT (public directory + realtime) | SELECT | ALL |
+| `slots` | SELECT (live inventory + realtime) | SELECT | ALL |
+| `claims` | **none** (PII) | SELECT only rows for events they own | ALL |
+| `event_settings` | **none** (`join_pin` must not leak) | **none** | ALL |
+
+Writes never go through the anon key. `/api` **must** use `SUPABASE_SERVICE_ROLE_KEY`. If that secret is missing, every create/claim/export call fails on purpose rather than silently using the anon key under RLS.
+
+#### Auth provider checklist
+
+1. **Authentication → Providers → Email** — enable Email.
+2. **Confirm email: OFF** — FairSlot expects an immediate session on sign-up (no inbox step).
+3. **Authentication → URL configuration** — add your Worker/Pages URL and `http://localhost:5173` to Redirect URLs / Site URL.
 
 ### 4.4 Auth — email and password only
 
@@ -205,9 +222,9 @@ Writes never go through the anon key. `/api` uses the service role.
 2. **Email** must be enabled.
 3. Disable **Google**, **Apple**, and every other provider. This app has no Google button.
 4. **Authentication → Providers → Email**:
-   - For the fastest first login, turn **Confirm email** **off** while you are testing. Turn it **on** later if you want a confirmation mail before first sign-in.
+   - Turn **Confirm email** **OFF**. FairSlot expects an immediate session on sign-up.
 5. **Authentication → URL Configuration**:
-   - **Site URL**: your future Pages URL, e.g. `https://fairslot.pages.dev` (you will come back and set this after section 7). For now you can use `http://localhost:5173`.
+   - **Site URL**: your Worker URL (e.g. `https://fairslot.<account>.workers.dev`) or custom domain. For local dev use `http://localhost:5173`.
    - **Redirect URLs** — add all of these:
      - `http://localhost:5173/**`
      - `http://127.0.0.1:5173/**`
@@ -264,7 +281,7 @@ Open [http://localhost:5173](http://localhost:5173). The UI will load. `/api` ca
 
 ### Frontend + `/api` together (recommended)
 
-Cloudflare’s local Pages emulator serves `dist` and the `functions/` folder:
+Cloudflare’s local Worker emulator serves `dist` and `functions/worker.js`:
 
 ```bash
 npm run build
@@ -298,7 +315,6 @@ npx wrangler pages dev dist --compatibility-flags=nodejs_compat --port 8788
 
 1. Go to `/login`.
 2. **Create one** organiser account (email + password, 6+ characters).
-3. If Confirm email is on, open the inbox and confirm before signing in.
 4. Create an event, add a slot, copy the share link.
 5. Open that link in a private window (no login) and claim the slot.
 6. Download the ticket on the success screen.
@@ -306,13 +322,25 @@ npx wrangler pages dev dist --compatibility-flags=nodejs_compat --port 8788
 
 ---
 
-## 7. Host the frontend (and `/api`) on Cloudflare Pages
+## 7. Host the frontend (and `/api`) on Cloudflare Workers
 
-The Vite app is a static SPA. The `functions/api/` directory is compiled by Pages into `/api/events`, `/api/slots`, `/api/claims`, `/api/public`, `/api/export`. You do **not** need a second host for the backend.
+The Vite app is a static SPA. `functions/worker.js` is the Worker entry: it serves `/api/*` and falls through to the `ASSETS` binding (`./dist`) for the SPA. You do **not** need a second host for the backend.
 
-### 7.1 Create the Pages project from GitHub
+`wrangler.toml` sets `run_worker_first = true` so `POST /api/*` is never answered with 405 by the static asset server.
 
-1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages → Create → Pages → Connect to Git**.
+### 7.1 Deploy from the CLI (recommended)
+
+```bash
+npm install
+npm run build
+npx wrangler login
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+npm run deploy
+```
+
+### 7.1b Or create from GitHub
+
+1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages → Create**.
 2. Authorise Cloudflare to read the GitHub account or organisation that owns `fairslot`.
 3. Select the repository.
 4. Configure the build:
@@ -328,7 +356,7 @@ The Vite app is a static SPA. The `functions/api/` directory is compiled by Page
 
 5. **Do not deploy yet.** Add environment variables first.
 
-### 7.2 Environment variables on Pages
+### 7.2 Environment variables on the Worker
 
 **Settings → Environment variables.** Add each key twice if you want Preview deploys to work as well: once for **Production**, once for **Preview**.
 
@@ -342,7 +370,7 @@ The Vite app is a static SPA. The `functions/api/` directory is compiled by Page
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | same anon key |
 | `NODE_VERSION` | `20` |
 
-**Runtime** (Pages Functions — encrypt / “Secret”):
+**Runtime** (Worker secrets — encrypt):
 
 | Name | Value |
 | --- | --- |
@@ -362,7 +390,7 @@ compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "dist"
 ```
 
-Pages reads that file. If a deploy logs an error about `process` or `Buffer`, open **Settings → Functions → Compatibility flags** and add `nodejs_compat` manually.
+`wrangler.toml` already sets `compatibility_flags = ["nodejs_compat"]`. If a deploy logs an error about `process` or `Buffer`, confirm that flag is present in the dashboard too.
 
 ### 7.4 SPA routing
 
@@ -373,7 +401,9 @@ Pages reads that file. If a deploy logs an error about `process` or `Buffer`, op
 /*      /index.html  200
 ```
 
-That keeps React Router paths (`/login`, `/e/ABCDEF`, `/studio/12`) from returning Cloudflare’s 404. `/api/*` stays on the Functions.
+`not_found_handling = "single-page-application"` keeps React Router paths (`/login`, `/e/ABCDEF`, `/studio/12`) from returning Cloudflare’s 404. `/api/*` is handled by the Worker first (`run_worker_first = true`).
+
+After deploy, open `/api/health` — you want `service_role_configured: true` and `service_role_distinct_from_anon: true`.
 
 ### 7.5 Custom domain (optional)
 
@@ -463,7 +493,10 @@ Re-run `supabase/schema.sql` only on an empty project. On an existing project, r
 | `Invalid API key` in the browser | Wrong or preview anon key | Replace `VITE_SUPABASE_*` with **your** project keys and rebuild |
 | `/api/*` returns 401 as an organiser | Session token not sent, or Functions using a different Supabase project than the frontend | Same URL + keys in build vars and runtime secrets |
 | `/api/*` returns 500 | Missing `SUPABASE_SERVICE_ROLE_KEY` on Functions | Add the secret, retry deploy |
-| “Could not authenticate” on sign-up | Confirm email is on, or Email provider off | Check Auth → Providers → Email |
+| `/api/*` says service role missing / identical to anon | Wrong key pasted into the service-role slot | Supabase → Settings → API → copy **service_role** secret |
+| Browser can read all claims / PINs via Supabase REST | Old world-readable RLS policies still active | Run `supabase/migrate_existing.sql` |
+| Claim works but realtime inventory does not move | Table not in `supabase_realtime`, or RLS blocks | Re-run publication + policy block in migrate script |
+| “Could not authenticate” on sign-up | Email provider off, or Confirm email still on | Auth → Providers → Email; Confirm email OFF |
 | Realtime counts do not move | Table not in `supabase_realtime` | Re-run the publication block in `schema.sql` |
 | PIN always rejected | Functions and UI pointed at different projects, or PIN not saved | Save settings in studio, hard-refresh the claim page |
 | CSV is empty or 401 | Not signed in, or `Authorization` header stripped | Export only from the studio while logged in |
@@ -482,7 +515,7 @@ git commit -m "Your message"
 git push origin main
 ```
 
-Cloudflare Pages builds `main` automatically. Watch the deployment log. After it is live, hard-refresh the site.
+If the Worker is connected to GitHub it rebuilds on push to `main`. Otherwise run `npm run deploy`. After it is live, hard-refresh the site and hit `/api/health`.
 
 If you only changed a secret, you do not need a code push: edit the Pages env var and **Retry deployment** so `VITE_*` is baked in again.
 
