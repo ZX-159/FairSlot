@@ -3,6 +3,7 @@ name = "fairslot"
 main = "functions/worker.js"
 compatibility_date = "2025-10-04"
 compatibility_flags = ["nodejs_compat"]
+keep_vars = true
 
 [assets]
 directory = "./dist"
