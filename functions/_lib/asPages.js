@@ -149,16 +149,4 @@ export function asPages(userHandler) {
 
     return done;
   };
-<<<<<<< HEAD
-}Promise.resolve(handler(req, res)).catch((err) => {
-        if (settled) return;
-        // 🔍 PRINT THE EXACT ERROR TO CLOUDFLARE LOGS
-        console.error("API Error caught in asPages:", err.message, err.stack);
-        
-        statusCode = 500;
-        resHeaders.set('Content-Type', 'application/json; charset=utf-8');
-        finish(JSON.stringify({ error: err.message || 'Server error' }));
-      });
-=======
 }
->>>>>>> 945c67e (Fix Worker asPages startup crash and Cloudflare deploy)
