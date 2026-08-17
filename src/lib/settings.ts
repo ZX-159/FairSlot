@@ -8,6 +8,8 @@ export const defaultSettings = (): EventSettings => ({
   hide_remaining: false,
   unlisted: false,
   require_notice_ack: false,
+  allow_notes: true,
+  show_location_link: true,
   claim_opens_at: null,
   claim_closes_at: null,
   notice_title: '',

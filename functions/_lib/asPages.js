@@ -1,8 +1,6 @@
 /**
  * Adapt a Vercel-style (req, res) handler for Cloudflare Workers.
- *
- * Kept dependency-free (no imports) so the Worker bundle cannot fail at
- * module-init with circular import / TDZ errors.
+ * No imports — keeps the Worker bundle free of circular init issues.
  */
 
 function copyEnvToProcess(env) {
@@ -13,7 +11,6 @@ function copyEnvToProcess(env) {
     /* ignore */
   }
 
-  // nodejs_compat provides process.env on Workers
   let proc;
   try {
     proc = typeof process !== 'undefined' ? process.env : null;
@@ -51,7 +48,6 @@ function copyEnvToProcess(env) {
 
 /**
  * @param {(req: any, res: any) => any} userHandler
- * @returns {(context: { request: Request, env: any, ctx?: any }) => Promise<Response>}
  */
 export function asPages(userHandler) {
   if (typeof userHandler !== 'function') {
@@ -89,19 +85,18 @@ export function asPages(userHandler) {
 
     const req = {
       method: request.method,
-      query,
-      body,
-      headers,
-      env,
+      query: query,
+      body: body,
+      headers: headers,
+      env: env,
       url: request.url,
     };
 
     let statusCode = 200;
     const resHeaders = new Headers();
     let finished = false;
-    /** @type {(value: Response) => void} */
     let settle;
-    const done = new Promise((resolve) => {
+    const done = new Promise(function (resolve) {
       settle = resolve;
     });
 
@@ -112,25 +107,25 @@ export function asPages(userHandler) {
     }
 
     const res = {
-      setHeader(key, value) {
+      setHeader: function (key, value) {
         resHeaders.set(key, value);
       },
-      status(code) {
+      status: function (code) {
         statusCode = code;
         return res;
       },
-      json(data) {
+      json: function (data) {
         if (!resHeaders.has('Content-Type')) {
           resHeaders.set('Content-Type', 'application/json; charset=utf-8');
         }
         finish(JSON.stringify(data === undefined ? null : data));
       },
-      send(data) {
+      send: function (data) {
         if (data == null) finish(null);
         else if (typeof data === 'string') finish(data);
         else finish(String(data));
       },
-      end() {
+      end: function () {
         finish(null);
       },
     };

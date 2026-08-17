@@ -3,26 +3,25 @@ name = "fairslot"
 main = "functions/worker.js"
 compatibility_date = "2025-10-04"
 compatibility_flags = ["nodejs_compat"]
+
+# Keep dashboard-set vars/secrets when deploying from CI
+# (otherwise empty local [vars] wipes SUPABASE_URL / ANON_KEY on deploy).
 keep_vars = true
 
 [assets]
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-# Worker must see /api/* before the asset server (avoids POST 405).
+# Worker must handle /api/* before the asset server (avoids POST 405).
 run_worker_first = true
 
-# Set real values in the Cloudflare dashboard (Workers → fairslot → Settings
-# → Variables and Secrets). Do NOT commit secrets here.
-#
-# Required vars:
+# Do NOT put real keys in this file.
+# Set in Cloudflare Dashboard → Workers → fairslot → Settings → Variables:
 #   SUPABASE_URL
 #   SUPABASE_ANON_KEY
-#   VITE_SUPABASE_URL              (build-time for SPA)
-#   VITE_SUPABASE_ANON_KEY         (build-time for SPA)
-#   NEXT_PUBLIC_SUPABASE_URL       (alias)
-#   NEXT_PUBLIC_SUPABASE_ANON_KEY  (alias)
-#
-# Required secret:
+#   VITE_SUPABASE_URL              (also as build var)
+#   VITE_SUPABASE_ANON_KEY         (also as build var)
+#   NEXT_PUBLIC_SUPABASE_URL
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY
+# Secret:
 #   SUPABASE_SERVICE_ROLE_KEY
-#   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY

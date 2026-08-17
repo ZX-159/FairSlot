@@ -172,3 +172,8 @@ $$;
 
 revoke all on function public.claim_slot(integer, text, text, text, text, text) from public;
 grant execute on function public.claim_slot(integer, text, text, text, text, text) to service_role;
+
+
+-- v2 settings columns
+alter table public.event_settings add column if not exists allow_notes boolean default true;
+alter table public.event_settings add column if not exists show_location_link boolean default true;

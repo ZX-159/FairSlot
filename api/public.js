@@ -11,6 +11,8 @@ function publicSettings(row) {
       hide_remaining: false,
       unlisted: false,
       require_notice_ack: false,
+      allow_notes: true,
+      show_location_link: true,
       claim_opens_at: null,
       claim_closes_at: null,
       notice_title: '',
@@ -28,6 +30,8 @@ function publicSettings(row) {
     hide_remaining: !!row.hide_remaining,
     unlisted: !!row.unlisted,
     require_notice_ack: !!row.require_notice_ack,
+    allow_notes: row.allow_notes !== false,
+    show_location_link: row.show_location_link !== false,
     claim_opens_at: row.claim_opens_at || null,
     claim_closes_at: row.claim_closes_at || null,
     notice_title: row.notice_title || '',
@@ -81,7 +85,7 @@ export default async function handler(req, res) {
     const supabase = db(req);
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-    const code = (req.query?.code || '').toString().trim().toUpperCase();
+    const code = (req.query?.code || '').toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     const token = (req.query?.token || '').toString().trim();
     const pin = (req.query?.pin || '').toString();
 
@@ -134,7 +138,7 @@ export default async function handler(req, res) {
 
     // Event by join code
     if (code) {
-      if (!/^[A-Z0-9]{4,12}$/.test(code)) {
+      if (!/^[A-Z0-9]{6,16}$/.test(code)) {
         return res.status(404).json({ error: 'No event found for that code' });
       }
       const { data: event } = await supabase

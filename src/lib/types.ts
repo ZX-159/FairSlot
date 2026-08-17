@@ -9,6 +9,8 @@ export interface EventSettings {
   hide_remaining: boolean;
   unlisted: boolean;
   require_notice_ack: boolean;
+  allow_notes: boolean;
+  show_location_link: boolean;
   claim_opens_at: string | null;
   claim_closes_at: string | null;
   notice_title: string;
@@ -37,6 +39,7 @@ export interface EventRecord {
   claimed?: number | null;
   fill?: number;
   settings?: EventSettings;
+  share_path?: string;
 }
 
 export interface SlotRecord {

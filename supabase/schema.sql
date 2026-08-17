@@ -68,7 +68,9 @@ create table if not exists public.event_settings (
   notice_body text default '',
   success_title text default '',
   success_message text default '',
-  ticket_note text default ''
+  ticket_note text default '',
+  allow_notes boolean default true,
+  show_location_link boolean default true
 );
 
 create index if not exists events_creator_id_idx on public.events (creator_id);

@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { isValidJoinCode, normalizeJoinCode } from '../lib/codes';
 import { motion } from 'framer-motion';
 import { ArrowRight, Lock, Radio, FileSpreadsheet, Sparkles, MessageCircle, Table2, ClipboardList } from 'lucide-react';
 import Navbar from '../components/Navbar';
@@ -37,8 +38,8 @@ export default function Home() {
 
   const join = (e: FormEvent) => {
     e.preventDefault();
-    const c = code.trim().toUpperCase();
-    if (c.length >= 4) navigate(`/e/${c}`);
+    const c = normalizeJoinCode(code);
+    if (isValidJoinCode(c)) navigate(`/e/${c}`);
   };
 
   return (
@@ -66,7 +67,7 @@ export default function Home() {
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
                 placeholder="Enter join code"
                 className="input-field font-mono tracking-[0.2em] uppercase sm:max-w-[220px]"
-                maxLength={8}
+                maxLength={16}
               />
               <button type="submit" className="btn-primary inline-flex items-center justify-center gap-2">
                 Claim a slot <ArrowRight size={16} />

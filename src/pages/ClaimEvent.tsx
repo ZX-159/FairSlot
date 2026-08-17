@@ -8,6 +8,7 @@ import SlotCard from '../components/SlotCard';
 import LiveDot from '../components/LiveDot';
 import type { PublicEvent, SlotRecord } from '../lib/types';
 import { formatDate, parseJsonSafe } from '../lib/api';
+import { isValidJoinCode, normalizeJoinCode } from '../lib/codes';
 import supabase from '../lib/supabase';
 
 function windowState(event: PublicEvent) {
@@ -19,8 +20,13 @@ function windowState(event: PublicEvent) {
   return { closed: false, reason: '' };
 }
 
+function mapsHref(location: string) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+}
+
 export default function ClaimEvent() {
-  const { code = '' } = useParams();
+  const { code: codeParam = '' } = useParams();
+  const code = normalizeJoinCode(codeParam);
   const navigate = useNavigate();
   const [event, setEvent] = useState<PublicEvent | null>(null);
   const [needsPin, setNeedsPin] = useState(false);
@@ -53,9 +59,15 @@ export default function ClaimEvent() {
   };
 
   const load = async (enteredPin?: string) => {
+    if (!isValidJoinCode(code)) {
+      setError('This share link is invalid. Check the code with your organiser.');
+      setEvent(null);
+      setLoading(false);
+      return null;
+    }
     try {
       const pinQ = enteredPin != null ? `&pin=${encodeURIComponent(enteredPin)}` : '';
-      const res = await fetch(`/api/public?code=${encodeURIComponent(code.toUpperCase())}${pinQ}`);
+      const res = await fetch(`/api/public?code=${encodeURIComponent(code)}${pinQ}`);
       const data = await parseJsonSafe(res) as PublicEvent & { needs_pin?: boolean } | null;
       if (!res.ok) throw new Error((data as any)?.error || 'Event not found');
       if (!data) throw new Error('Event not found');
@@ -323,10 +335,16 @@ export default function ClaimEvent() {
                   <Calendar size={15} /> {formatDate(event.event_date, true)}
                 </span>
                 {event.location && (
+                event.settings?.show_location_link !== false ? (
+                  <a href={mapsHref(event.location)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 underline decoration-gold/40 underline-offset-2">
+                    <MapPin size={14} /> {event.location}
+                  </a>
+                ) : (
                   <span className="inline-flex items-center gap-1.5">
-                    <MapPin size={15} /> {event.location}
+                    <MapPin size={14} /> {event.location}
                   </span>
-                )}
+                )
+              )}
               </div>
             </div>
             {!event.settings?.hide_remaining && (
@@ -389,12 +407,14 @@ export default function ClaimEvent() {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                   />
-                  <textarea
-                    className="input-field min-h-[84px] resize-none"
-                    placeholder="Note for the organiser (optional)"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                  />
+                  {event.settings?.allow_notes !== false && (
+                    <textarea
+                      className="input-field min-h-[84px] resize-none"
+                      placeholder="Note for the organiser (optional)"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                    />
+                  )}
                 </div>
                 <AnimatePresence>
                   {formError && (

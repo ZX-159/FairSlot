@@ -87,6 +87,18 @@ export default function EventSettingsFields({
             checked={value.unlisted}
             onChange={(v) => set({ unlisted: v })}
           />
+          <Toggle
+            label="Allow participant notes"
+            hint="Show an optional notes field on the claim form."
+            checked={value.allow_notes !== false}
+            onChange={(v) => set({ allow_notes: v })}
+          />
+          <Toggle
+            label="Link location in maps"
+            hint="Turn the location into a Google Maps search link for participants."
+            checked={value.show_location_link !== false}
+            onChange={(v) => set({ show_location_link: v })}
+          />
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="block">
