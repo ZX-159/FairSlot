@@ -10,6 +10,9 @@ import ClaimReceipt from './pages/ClaimReceipt';
 import Dashboard from './pages/Dashboard';
 import EventEditor from './pages/EventEditor';
 import EventManage from './pages/EventManage';
+import Account from './pages/Account';
+import Faq from './pages/Faq';
+import Guide from './pages/Guide';
 
 export default function App() {
   return (
@@ -21,12 +24,23 @@ export default function App() {
           <Route path="/events" element={<PublicEvents />} />
           <Route path="/join" element={<JoinEvent />} />
           <Route path="/e/:code" element={<ClaimEvent />} />
+          <Route path="/event/:code" element={<ClaimEvent />} />
           <Route path="/receipt/:token" element={<ClaimReceipt />} />
+          <Route path="/faq" element={<Faq />} />
+          <Route path="/guide" element={<Guide />} />
           <Route
             path="/dashboard"
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/account"
+            element={
+              <ProtectedRoute>
+                <Account />
               </ProtectedRoute>
             }
           />
@@ -46,7 +60,6 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/event/:code" element={<ClaimEvent />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

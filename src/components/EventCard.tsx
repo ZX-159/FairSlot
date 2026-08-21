@@ -32,8 +32,12 @@ export default function EventCard({
           <div className="absolute left-4 top-4 flex items-center gap-2">
             {event.locked ? (
               <span className="rounded-full bg-ink/80 px-2.5 py-1 text-[11px] uppercase tracking-wider text-cream">Locked</span>
-            ) : (
+            ) : event.status === 'live' ? (
               <LiveDot />
+            ) : (
+              <span className="rounded-full bg-cream/95 px-2.5 py-1 text-[11px] uppercase tracking-wider text-ink/70">
+                {event.status || 'draft'}
+              </span>
             )}
             <span className="rounded-full bg-cream/90 px-2.5 py-1 text-[11px] uppercase tracking-wider text-ink">
               {event.category}

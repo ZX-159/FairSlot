@@ -10,25 +10,43 @@ export default function Footer() {
             <Logo light />
           </span>
           <p className="mt-4 max-w-sm text-sm leading-relaxed text-cream/65">
-            Frictionless event allocation. Live inventory, immutable locks, and a tidy CSV — without chat chaos or spreadsheet archaeology.
+            Frictionless event allocation. Live inventory, immutable locks, and a tidy CSV — without chat chaos or
+            spreadsheet archaeology.
           </p>
         </div>
         <div>
           <p className="text-xs uppercase tracking-[0.18em] text-gold/80">For everyone</p>
           <div className="mt-4 flex flex-col gap-2 text-sm text-cream/75">
-            <Link to="/events" className="hover:text-cream">Browse open events</Link>
-            <Link to="/join" className="hover:text-cream">Join with a code</Link>
-            <Link to="/login" className="hover:text-cream">Creator studio</Link>
+            <Link to="/events" className="hover:text-cream">
+              Browse open events
+            </Link>
+            <Link to="/join" className="hover:text-cream">
+              Join with a code
+            </Link>
+            <Link to="/login" className="hover:text-cream">
+              Creator studio
+            </Link>
+            <Link to="/faq" className="hover:text-cream">
+              FAQ
+            </Link>
           </div>
         </div>
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-gold/80">The promise</p>
-          <ul className="mt-4 space-y-2 text-sm text-cream/75">
-            <li>Zero-login for participants</li>
-            <li>Instant live inventory</li>
-            <li>Immutable locking</li>
-            <li>Tidy CSV exports</li>
-          </ul>
+          <p className="text-xs uppercase tracking-[0.18em] text-gold/80">For creators</p>
+          <div className="mt-4 flex flex-col gap-2 text-sm text-cream/75">
+            <Link to="/guide" className="hover:text-cream">
+              Creator guide
+            </Link>
+            <Link to="/dashboard" className="hover:text-cream">
+              Studio dashboard
+            </Link>
+            <Link to="/account" className="hover:text-cream">
+              Account settings
+            </Link>
+            <Link to="/events/new" className="hover:text-cream">
+              New event
+            </Link>
+          </div>
         </div>
       </div>
       <div className="border-t border-cream/10 px-5 py-5 text-center text-xs text-cream/40">

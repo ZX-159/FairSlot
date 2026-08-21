@@ -76,6 +76,7 @@ function envReport(env) {
   return {
     ok: true,
     service: 'fairslot',
+    version: '1.2.0',
     time: new Date().toISOString(),
     supabase_url_configured: Boolean(url),
     service_role_configured: Boolean(serviceKey),

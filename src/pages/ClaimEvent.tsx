@@ -45,6 +45,7 @@ export default function ClaimEvent() {
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
   const [pulse, setPulse] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const applyPayload = (data: PublicEvent & { needs_pin?: boolean }) => {
     if (data.needs_pin) {
@@ -156,29 +157,39 @@ export default function ClaimEvent() {
     setNoticePassed(true);
   };
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setFormError('');
+  const validateClaim = () => {
     if (!selected) {
       setFormError('Choose a slot first.');
-      return;
+      return false;
     }
     if (!name.trim() || !email.trim()) {
       setFormError('Name and email are required.');
-      return;
+      return false;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setFormError('Please enter a valid email.');
-      return;
+      return false;
     }
     if (event?.settings?.confirm_email && email.trim().toLowerCase() !== emailConfirm.trim().toLowerCase()) {
       setFormError('Email addresses do not match.');
-      return;
+      return false;
     }
     if (event?.settings?.require_phone && !phone.trim()) {
       setFormError('A phone number is required.');
-      return;
+      return false;
     }
+    setFormError('');
+    return true;
+  };
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!validateClaim()) return;
+    setConfirmOpen(true);
+  };
+
+  const confirmClaim = async () => {
+    if (!validateClaim() || !selected) return;
     setBusy(true);
     try {
       const res = await fetch('/api/claims', {
@@ -197,9 +208,11 @@ export default function ClaimEvent() {
       });
       const data = await parseJsonSafe(res) as any;
       if (!res.ok) throw new Error(data?.error || 'Could not claim');
+      setConfirmOpen(false);
       navigate(`/receipt/${data.claim_token}`);
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : 'Could not claim');
+      setConfirmOpen(false);
       load(pin || undefined);
     } finally {
       setBusy(false);
@@ -433,6 +446,47 @@ export default function ClaimEvent() {
         )}
       </main>
       <Footer />
+
+      <AnimatePresence>
+        {confirmOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 grid place-items-center bg-ink/50 p-5 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ y: 16, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="w-full max-w-md rounded-3xl bg-cream p-7 shadow-xl"
+            >
+              <h3 className="font-display text-2xl">Confirm your claim?</h3>
+              <p className="mt-2 text-sm leading-relaxed text-ink-soft/75">
+                You are claiming <strong className="text-ink">{selectedSlot?.name || 'this slot'}</strong> as{' '}
+                <strong className="text-ink">{name.trim()}</strong> ({email.trim()}). This cannot be easily undone.
+              </p>
+              <div className="mt-6 flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setConfirmOpen(false)}
+                  className="rounded-full px-4 py-2 text-sm text-ink/60"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={confirmClaim}
+                  className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
+                >
+                  {busy ? 'Claiming…' : 'Confirm claim'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

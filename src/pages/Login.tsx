@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import supabase from '../lib/supabase';
 
 export default function Login() {
-  const { user, loading } = useAuth();
+  const { user, loading, configured } = useAuth();
   const [mode, setMode] = useState<'in' | 'up'>('in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,6 +15,22 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
 
   if (!loading && user) return <Navigate to="/dashboard" replace />;
+
+  if (!configured) {
+    return (
+      <div className="min-h-screen grid place-items-center bg-parchment px-5">
+        <div className="max-w-md rounded-[2rem] bg-cream p-8 text-center ring-1 ring-ink/8">
+          <h1 className="font-display text-3xl">Auth is not configured</h1>
+          <p className="mt-3 text-sm text-ink-soft/70">
+            Missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY in the build environment.
+          </p>
+          <Link to="/" className="btn-primary mt-6 inline-block">
+            Back home
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -49,7 +65,10 @@ export default function Login() {
         if (err) throw err;
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not authenticate');
+      const msg = err instanceof Error ? err.message : 'Could not authenticate';
+      if (/invalid login/i.test(msg)) setError('Wrong email or password.');
+      else if (/already registered/i.test(msg)) setError('That email already has an account. Sign in instead.');
+      else setError(msg);
     } finally {
       setBusy(false);
     }

@@ -2,8 +2,18 @@ import { cors, getUser, db } from './_auth.js';
 
 function makeToken() {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const len = 22;
+  try {
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      const buf = new Uint8Array(len);
+      crypto.getRandomValues(buf);
+      let s = '';
+      for (let i = 0; i < len; i++) s += chars[buf[i] % chars.length];
+      return s;
+    }
+  } catch { /* fall through */ }
   let s = '';
-  for (let i = 0; i < 14; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
   return s;
 }
 

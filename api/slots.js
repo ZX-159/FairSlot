@@ -34,7 +34,47 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const { event_id, name, description, category, capacity, sort_order } = req.body || {};
+      const body = req.body || {};
+
+      // Bulk create: { action:'bulk', event_id, slots:[{name,capacity,category,description}] }
+      if (body.action === 'bulk') {
+        const event_id = Number(body.event_id);
+        const list = Array.isArray(body.slots) ? body.slots : [];
+        if (!event_id) return res.status(400).json({ error: 'event_id is required' });
+        if (!list.length) return res.status(400).json({ error: 'Add at least one slot' });
+        if (list.length > 40) return res.status(400).json({ error: 'Max 40 slots per bulk add' });
+        const event = await ownedEvent(supabase, user.id, event_id);
+        if (!event) return res.status(404).json({ error: 'Event not found' });
+        if (event.locked) return res.status(423).json({ error: 'Event is locked' });
+        const { data: existing } = await supabase
+          .from('slots')
+          .select('sort_order')
+          .eq('event_id', event_id)
+          .order('sort_order', { ascending: false })
+          .limit(1);
+        let base = existing?.[0]?.sort_order != null ? Number(existing[0].sort_order) + 1 : 0;
+        const rows = [];
+        for (const raw of list) {
+          const name = String(raw?.name || '').trim().slice(0, 200);
+          if (!name) continue;
+          rows.push({
+            event_id,
+            name,
+            description: raw?.description ? String(raw.description).slice(0, 2000) : '',
+            category: raw?.category ? String(raw.category).slice(0, 80) : 'General',
+            capacity: Math.max(1, Number(raw?.capacity) || 1),
+            claimed_count: 0,
+            sort_order: base++,
+            locked: false,
+          });
+        }
+        if (!rows.length) return res.status(400).json({ error: 'No valid slot names' });
+        const { data, error } = await supabase.from('slots').insert(rows).select();
+        if (error) throw error;
+        return res.status(201).json({ ok: true, slots: data || [], count: (data || []).length });
+      }
+
+      const { event_id, name, description, category, capacity, sort_order } = body;
       if (!event_id || !name) return res.status(400).json({ error: 'event_id and name are required' });
       const event = await ownedEvent(supabase, user.id, event_id);
       if (!event) return res.status(404).json({ error: 'Event not found' });

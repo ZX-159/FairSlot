@@ -8,6 +8,8 @@ import EventSettingsFields from '../components/EventSettingsFields';
 import { useAuth } from '../contexts/AuthContext';
 import { authFetch, formatDate, formatRelative, parseJsonSafe } from '../lib/api';
 import { eventShareUrl } from '../lib/codes';
+import { qrToDataUrl } from '../lib/qr';
+import { useToast } from '../components/Toast';
 import { defaultSettings, toLocalInput } from '../lib/settings';
 import type { ClaimRecord, EventRecord, EventSettings, SlotRecord } from '../lib/types';
 import supabase from '../lib/supabase';
@@ -22,6 +24,7 @@ export default function EventManage() {
   const { id } = useParams();
   const { session } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
   const [event, setEvent] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -47,6 +50,11 @@ export default function EventManage() {
   const [metaBusy, setMetaBusy] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState('');
+  const [showQr, setShowQr] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = async () => {
     try {
@@ -72,6 +80,24 @@ export default function EventManage() {
     if (session && id) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, id]);
+
+  useEffect(() => {
+    if (!event?.join_code) {
+      setQrDataUrl('');
+      return;
+    }
+    let alive = true;
+    qrToDataUrl(eventShareUrl(event.join_code), 280)
+      .then((url) => {
+        if (alive) setQrDataUrl(url);
+      })
+      .catch(() => {
+        if (alive) setQrDataUrl('');
+      });
+    return () => {
+      alive = false;
+    };
+  }, [event?.join_code]);
 
   useEffect(() => {
     if (!event?.id) return;
@@ -126,6 +152,46 @@ export default function EventManage() {
     }
   };
 
+  const bulkAddSlots = async () => {
+    if (!event || event.locked) return;
+    // lines: Name | capacity | category
+    const lines = bulkText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (!lines.length) {
+      setSlotErr('Paste one slot per line: Name, capacity, category');
+      return;
+    }
+    const slots = lines.map((line) => {
+      const parts = line.split(/[,|\t]/).map((p) => p.trim());
+      return {
+        name: parts[0] || '',
+        capacity: Number(parts[1]) || 1,
+        category: parts[2] || slotCat || 'Session',
+        description: parts[3] || '',
+      };
+    });
+    setBulkBusy(true);
+    setSlotErr('');
+    try {
+      const res = await authFetch('/api/slots', session, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'bulk', event_id: event.id, slots }),
+      });
+      const data = await parseJsonSafe(res) as any;
+      if (!res.ok) throw new Error(data?.error || 'Bulk add failed');
+      setBulkText('');
+      setBulkOpen(false);
+      toast.ok(`Added ${data.count || slots.length} slots`);
+      await load();
+    } catch (err: unknown) {
+      setSlotErr(err instanceof Error ? err.message : 'Bulk add failed');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const removeSlot = async (slotId: number) => {
     if (!confirm('Remove this slot and its claims?')) return;
     const res = await authFetch('/api/slots', session, {
@@ -170,6 +236,7 @@ export default function EventManage() {
       const data = await parseJsonSafe(res) as any;
       if (!res.ok) throw new Error(data?.error || 'Could not save settings');
       setOkMsg('Settings saved.');
+      toast.ok('Settings saved');
       setSettings({ ...defaultSettings(), ...(data.settings || settings) });
     } catch (err: unknown) {
       setMsg(err instanceof Error ? err.message : 'Could not save settings');
@@ -238,6 +305,7 @@ export default function EventManage() {
       const data = await parseJsonSafe(res) as any;
       if (!res.ok) throw new Error(data?.error || 'Could not save');
       setOkMsg('Event details saved.');
+      toast.ok('Event details saved');
       setEditingMeta(false);
       await load();
     } catch (err: unknown) {
@@ -262,6 +330,7 @@ export default function EventManage() {
       return;
     }
     setOkMsg('New magic link ready. Copy it below.');
+    toast.ok('New magic link ready');
     await load();
   };
 
@@ -433,6 +502,9 @@ export default function EventManage() {
               <button type="button" onClick={openShare} className="inline-flex items-center gap-1.5 rounded-full bg-parchment px-3 py-1.5 text-xs ring-1 ring-ink/10">
                 <ExternalLink size={12} /> Preview
               </button>
+              <button type="button" onClick={() => setShowQr((v) => !v)} className="inline-flex items-center gap-1.5 rounded-full bg-parchment px-3 py-1.5 text-xs ring-1 ring-ink/10">
+                QR code
+              </button>
               {!event.locked && (
                 <button type="button" onClick={regenerateCode} className="inline-flex items-center gap-1.5 rounded-full bg-parchment px-3 py-1.5 text-xs ring-1 ring-ink/10" title="Invalidate old link">
                   <RefreshCw size={12} /> New code
@@ -440,6 +512,24 @@ export default function EventManage() {
               )}
             </div>
           </div>
+          {showQr && (
+            <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-ink/6 pt-4">
+              {qrDataUrl ? (
+                <img src={qrDataUrl} alt="Share QR" className="h-40 w-40 rounded-2xl ring-1 ring-ink/10" />
+              ) : (
+                <div className="h-40 w-40 animate-pulse rounded-2xl bg-ink/5" />
+              )}
+              <div className="text-sm text-ink-soft/70">
+                <p className="font-medium text-ink">Scan to open the claim page</p>
+                <p className="mt-1 text-xs">Print this on a poster or slide. Same magic link as above.</p>
+                {qrDataUrl && (
+                  <a href={qrDataUrl} download={`fairslot-${event.join_code}-qr.png`} className="mt-3 inline-block text-xs text-moss underline">
+                    Download PNG
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <section className="mt-6 rounded-3xl bg-cream p-5 ring-1 ring-ink/6">
@@ -576,7 +666,29 @@ export default function EventManage() {
 
             {!event.locked && (
               <form onSubmit={addSlot} className="mt-5 rounded-3xl bg-cream p-5 ring-1 ring-ink/8">
-                <p className="font-display text-lg">Add a slot</p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-display text-lg">Add a slot</p>
+                  <button type="button" onClick={() => setBulkOpen((v) => !v)} className="text-xs text-moss underline">
+                    {bulkOpen ? 'Single add' : 'Bulk paste'}
+                  </button>
+                </div>
+                {bulkOpen ? (
+                  <div className="mt-3 space-y-3">
+                    <p className="text-xs text-ink-soft/65">One slot per line: <span className="font-mono">Name, capacity, category</span></p>
+                    <textarea
+                      className="input-field min-h-[120px] resize-y font-mono text-sm"
+                      placeholder={"Morning workshop, 12, Session\nAfternoon lab, 8, Lab"}
+                      value={bulkText}
+                      onChange={(e) => setBulkText(e.target.value)}
+                    />
+                    <button type="button" disabled={bulkBusy} onClick={bulkAddSlots} className="btn-primary px-4 py-2 text-sm disabled:opacity-60">
+                      {bulkBusy ? 'Adding…' : 'Add all lines'}
+                    </button>
+                    {slotErr && <p className="text-sm text-terra">{slotErr}</p>}
+                  </div>
+                ) : (
+                <>
+                <p className="sr-only">Add a slot</p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <input className="input-field" placeholder="Name — Morning workshop" value={slotName} onChange={(e) => setSlotName(e.target.value)} />
                   <input className="input-field" placeholder="Category" value={slotCat} onChange={(e) => setSlotCat(e.target.value)} />
@@ -598,6 +710,8 @@ export default function EventManage() {
                   </button>
                 </div>
                 {slotErr && <p className="mt-2 text-sm text-terra">{slotErr}</p>}
+                </>
+                )}
               </form>
             )}
           </section>
